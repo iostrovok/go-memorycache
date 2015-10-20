@@ -1,14 +1,19 @@
 package memorycache
 
+import "time"
+
 type Act uint
 
 // Storage types
 const (
 	TypeGet    Act = iota
+	TypeGetTag Act = iota
 	TypePut    Act = iota
 	TypeRemove Act = iota
+	TypeRemTag Act = iota
 	TypeFlush  Act = iota
 	TypeCount  Act = iota
+	TypeSetTTL Act = iota
 )
 
 type Res struct {
@@ -23,6 +28,8 @@ type Request struct {
 	Data       interface{}
 	Compress   Compress
 	ResultChan chan *Res
+	Tags       []string
+	TTL        time.Duration
 }
 
 func NewRes() *Res {
@@ -33,7 +40,7 @@ func NewRes() *Res {
 	}
 }
 
-func NewRequest(act Act, k Key) *Request {
+func NewRequest(act Act, k Key, TTL ...time.Duration) *Request {
 	return &Request{
 		Action:     act,
 		Key:        k,

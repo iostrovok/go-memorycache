@@ -60,6 +60,8 @@ func (s *CreateCacheTestsSuite) Test_Put_Over(c *C) {
 		st.Put(i, fmt.Sprintf("==> %d", i))
 	}
 
+	// !! TTLCleanDefault = 1 * time.Minute
+	st.TTLClean(time.Millisecond * 10)
 	time.Sleep(time.Millisecond * 1000)
 
 	c.Check(len(st.Shards[0].entries), Equals, perShard)
@@ -79,5 +81,12 @@ func (s *CreateCacheTestsSuite) Test_Get_1(c *C) {
 	c.Check(ok, Equals, true)
 	c.Check(res, Equals, "some data")
 
+	st.Close()
+}
+
+func (s *CreateCacheTestsSuite) Test_Put_Tags(c *C) {
+	//c.Skip("Not now")
+	st := New(5, 100)
+	st.Put(100, "==> key")
 	st.Close()
 }

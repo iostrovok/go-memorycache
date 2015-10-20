@@ -16,8 +16,11 @@ const (
 type Entry struct {
 	Key         Key
 	CreateDate  time.Time
+	EndDate     time.Time
 	CompressTag Compress
 	Data        interface{}
+	Tags        map[string]bool
+	CheckTime   bool
 }
 
 func EmptyEntry() *Entry {
@@ -25,22 +28,35 @@ func EmptyEntry() *Entry {
 		Key:        NewKey(""),
 		CreateDate: time.Now(),
 		Data:       nil,
+		Tags:       map[string]bool{},
 	}
 }
 
 // CreateEntry returns new instance of Entry
-func CreateEntry(k Key, data interface{}, CompressTag ...Compress) *Entry {
+func CreateEntry(k Key, data interface{}, comp Compress, tags []string, TTL time.Duration) *Entry {
 	out := &Entry{
-		Key:        k,
-		CreateDate: time.Now(),
-		Data:       data,
+		Key:         k,
+		CreateDate:  time.Now(),
+		Data:        data,
+		Tags:        map[string]bool{},
+		CompressTag: comp,
 	}
 
-	if len(CompressTag) > 0 {
-		if CompressTag[0] != Nothing {
-			out.CompressTag = CompressTag[0]
-		}
+	if TTL != 0 {
+		out.CheckTime = true
+		out.EndDate = time.Now().Add(TTL)
+	}
+
+	for _, s := range tags {
+		out.Tags[s] = true
 	}
 
 	return out
+}
+
+func (e *Entry) Valid() bool {
+	if !e.CheckTime {
+		return true
+	}
+	return time.Now().Before(e.EndDate)
 }

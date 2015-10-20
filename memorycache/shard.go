@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	TTLClean = 500 * time.Millisecond
+	TTLCleanDefault = 1 * time.Minute
 )
 
 // MemoryCache storage memory
@@ -18,6 +18,7 @@ type Shard struct {
 	inChan  chan *Request
 
 	oldest []string
+	ticker *time.Ticker
 }
 
 func NewShard(l int) *Shard {
@@ -25,6 +26,7 @@ func NewShard(l int) *Shard {
 		Len:     l,
 		entries: map[string]*Entry{},
 		inChan:  make(chan *Request, 100),
+		ticker:  time.NewTicker(TTLCleanDefault),
 	}
 
 	go s._work()
@@ -42,11 +44,9 @@ func (s *Shard) Stop() {
 
 func (s *Shard) _work() {
 
-	ticker := time.Tick(TTLClean)
-
 	for {
 		select {
-		case <-ticker:
+		case <-s.ticker.C:
 			s.trim()
 		case mes, ok := <-s.inChan:
 			if !ok {
@@ -66,9 +66,18 @@ func (s *Shard) _make(mes *Request) {
 		s.put(mes)
 	case TypeRemove:
 		s.remove(mes)
+	case TypeRemTag:
+		s.removeTag(mes)
 	case TypeFlush:
 		s.flush()
+	case TypeSetTTL:
+		s.setTTL(mes)
 	}
+}
+
+func (s *Shard) setTTL(mes *Request) {
+	s.ticker.Stop()
+	s.ticker = time.NewTicker(mes.TTL)
 }
 
 func (s *Shard) get(mes *Request) {
@@ -77,7 +86,7 @@ func (s *Shard) get(mes *Request) {
 	s.RUnlock()
 
 	out := NewRes()
-	if ok {
+	if ok && out.Entry.Valid() {
 		out.Entry = entry
 		out.Ok = true
 	}
@@ -92,7 +101,11 @@ func (s *Shard) get(mes *Request) {
 
 func (s *Shard) put(mes *Request) {
 
-	e := CreateEntry(mes.Key, mes.Data, mes.Compress)
+	e := CreateEntry(mes.Key, mes.Data, mes.Compress, mes.Tags, mes.TTL)
+
+	if !e.Valid() {
+		return
+	}
 
 	s.Lock()
 	defer s.Unlock()
@@ -101,6 +114,40 @@ func (s *Shard) put(mes *Request) {
 	s.oldest = append(s.oldest, mes.Key.ID)
 
 	return
+}
+
+func (s *Shard) removeTag(mes *Request) {
+	s.Lock()
+	defer s.Unlock()
+
+	list := map[string]*Entry{}
+	for key, entry := range s.entries {
+		if !entry.Valid() {
+			continue
+		}
+
+		valid := true
+		for _, tag := range mes.Tags {
+			if entry.Tags[tag] {
+				valid = false
+				break
+			}
+		}
+
+		if valid {
+			list[key] = entry
+		}
+	}
+	s.entries = list
+
+	// Update oldest
+	oldest := []string{}
+	for _, key := range s.oldest {
+		if _, ok := s.entries[key]; ok {
+			oldest = append(oldest, key)
+		}
+	}
+	s.oldest = oldest
 }
 
 func (s *Shard) remove(mes *Request) {
@@ -131,8 +178,8 @@ func (s *Shard) trim() {
 	s.oldest = s.oldest[forDelete:]
 	list := map[string]*Entry{}
 	for _, key := range s.oldest {
-		if ent, ok := s.entries[key]; ok {
-			list[key] = ent
+		if entry, ok := s.entries[key]; ok && entry.Valid() {
+			list[key] = entry
 		}
 	}
 	s.entries = list
