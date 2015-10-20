@@ -1,7 +1,7 @@
 package memorycache
 
 import (
-	"hash/fnv"
+	"hash/crc32"
 )
 
 const sep byte = '_'
@@ -20,7 +20,5 @@ func NewKey(id string, tags ...string) Key {
 }
 
 func (key *Key) ShardID(maxId int) int {
-	hash := fnv.New32()
-	hash.Write([]byte(key.ID))
-	return int(hash.Sum32()) % maxId
+	return int(crc32.Checksum([]byte(key.ID), crc32.MakeTable(crc32.Koopman))) % maxId
 }
