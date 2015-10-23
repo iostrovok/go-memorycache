@@ -21,6 +21,7 @@ type Entry struct {
 	Data        interface{}
 	Tags        map[string]bool
 	CheckTime   bool
+	Body        []byte
 }
 
 func EmptyEntry() *Entry {
@@ -29,15 +30,29 @@ func EmptyEntry() *Entry {
 		CreateDate: time.Now(),
 		Data:       nil,
 		Tags:       map[string]bool{},
+		Body:       []byte{},
 	}
 }
 
+func _press(data interface{}, PF map[string]Press, tag string) (interface{}, bool) {
+	f, ok := PF[tag]
+	if !ok {
+		return nil, false
+	}
+
+	out, err := f(data)
+	if err != nil {
+		return nil, false
+	}
+
+	return out, true
+}
+
 // CreateEntry returns new instance of Entry
-func CreateEntry(k Key, data interface{}, comp Compress, tags []string, TTL time.Duration) *Entry {
+func CreateEntry(k Key, data interface{}, comp Compress, tags []string, TTL time.Duration, PF map[string]Press) *Entry {
 	out := &Entry{
 		Key:         k,
 		CreateDate:  time.Now(),
-		Data:        data,
 		Tags:        map[string]bool{},
 		CompressTag: comp,
 	}
@@ -47,8 +62,21 @@ func CreateEntry(k Key, data interface{}, comp Compress, tags []string, TTL time
 		out.EndDate = time.Now().Add(TTL)
 	}
 
+	pressed := false
 	for _, s := range tags {
 		out.Tags[s] = true
+		if !pressed {
+			out.Data, pressed = _press(data, PF, s)
+		}
+	}
+
+	// Get press function for default value (if it exists)
+	if !pressed {
+		out.Data, pressed = _press(data, PF, "")
+	}
+
+	if !pressed {
+		out.Data = data
 	}
 
 	return out

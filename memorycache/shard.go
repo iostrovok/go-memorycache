@@ -27,6 +27,9 @@ type Shard struct {
 	oldest []string
 	ticker *time.Ticker
 	ttl    time.Duration
+
+	pressFuncs   map[string]Press
+	upPressFuncs map[string]UnPress
 }
 
 func NewShard(l int) *Shard {
@@ -156,7 +159,7 @@ func (s *Shard) getTag(mes *Request) {
 
 func (s *Shard) put(mes *Request) {
 
-	e := CreateEntry(mes.Key, mes.Data, mes.Compress, mes.Tags, mes.TTL)
+	e := CreateEntry(mes.Key, mes.Data, mes.Compress, mes.Tags, mes.TTL, s.pressFuncs)
 
 	if !e.Valid() {
 		return
@@ -166,6 +169,12 @@ func (s *Shard) put(mes *Request) {
 	defer s.Unlock()
 
 	s.entries[mes.Key.ID] = e
+
+	// if b, ok := data.(Body); ok {
+	// 	mes.Body = b.Press()
+	// 	mes.IsPressed = true
+	// }
+
 	s.oldest = append(s.oldest, mes.Key.ID)
 
 	return
