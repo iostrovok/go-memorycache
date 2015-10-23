@@ -17,7 +17,8 @@ const (
 )
 
 type Res struct {
-	Entry *Entry
+	//Entry *Entry
+	Data  interface{}
 	Ok    bool
 	Count int
 }
@@ -34,7 +35,6 @@ type Request struct {
 
 func NewRes() *Res {
 	return &Res{
-		Entry: EmptyEntry(),
 		Ok:    false,
 		Count: 0,
 	}

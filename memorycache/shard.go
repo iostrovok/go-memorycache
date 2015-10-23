@@ -9,7 +9,7 @@ const (
 	TTLCleanDefault = 1 * time.Minute
 )
 
-// MemoryCache storage memory
+// MemoryCache mCache memory
 type Shard struct {
 	sync.RWMutex
 
@@ -86,16 +86,17 @@ func (s *Shard) get(mes *Request) {
 	s.RUnlock()
 
 	out := NewRes()
-	if ok && out.Entry.Valid() {
-		out.Entry = entry
+	if ok && entry.Valid() {
+		out.Data = entry.Data
 		out.Ok = true
 	}
 
+	//mes.ResultChan <- out
 	mes.ResultChan <- out
 }
 
 // func (s *Shard) shardCount(shardID int, stChan chan []int) (mes Request) {
-// 	stChan <- []int{shardID, len(storageMemory.entries[shardID])}
+// 	stChan <- []int{shardID, len(mCacheMemory.entries[shardID])}
 // 	return
 // }
 

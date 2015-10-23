@@ -7,15 +7,15 @@ import (
 var Singleton *MemoryCache = nil
 
 // NewMemoryCache returns new initializated instance of MemoryCache
-func NewSingleton(shards int, maxEntriesPerShard int) {
-	Singleton = New(shards, maxEntriesPerShard)
+func NewSingleton(shards int, totalLimit int) {
+	Singleton = New(shards, totalLimit)
 }
 
 func TTLClean(t time.Duration) {
 	Singleton.TTLClean(t)
 }
 
-// Close storage memory channels
+// Close mCache memory channels
 func Close() {
 	Singleton.Close()
 	Singleton = nil
@@ -26,12 +26,12 @@ func Get(k string) (data interface{}, ok bool) {
 	return Singleton.Get(k)
 }
 
-// Put puts new data in storage _WITHOUT_ TTL
+// Put puts new data in mCache _WITHOUT_ TTL
 func Put(data interface{}, k string, tags ...string) {
 	Singleton.Put(data, k, tags...)
 }
 
-// PutTTL puts new data in storage _WITH_ TTL
+// PutTTL puts new data in mCache _WITH_ TTL
 func PutTTL(data interface{}, k string, TTL time.Duration, tags ...string) {
 	Singleton.PutTTL(data, k, TTL, tags...)
 }

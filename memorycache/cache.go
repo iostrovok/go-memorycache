@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// MemoryCache storage memory
+// MemoryCache mCache memory
 type MemoryCache struct {
 	sync.RWMutex
 
@@ -19,31 +19,31 @@ type MemoryCache struct {
 
 // NewMemoryCache returns new initializated instance of MemoryCache
 func New(shards int, totalLimit int) *MemoryCache {
-	storage := &MemoryCache{}
-	storage.maxShards = shards
-	storage.maxEntries = totalLimit
-	storage.Shards = make([]*Shard, storage.maxShards)
-	storage.maxEntriesPerShard = 1 + totalLimit/shards
+	mCache := &MemoryCache{}
+	mCache.maxShards = shards
+	mCache.maxEntries = totalLimit
+	mCache.Shards = make([]*Shard, mCache.maxShards)
+	mCache.maxEntriesPerShard = 1 + totalLimit/shards
 
-	storage.ttlClean = TTLCleanDefault
+	mCache.ttlClean = TTLCleanDefault
 
 	for i := 0; i < shards; i++ {
-		storage.Shards[i] = NewShard(storage.maxEntriesPerShard)
+		mCache.Shards[i] = NewShard(mCache.maxEntriesPerShard)
 	}
 
-	return storage
+	return mCache
 }
 
 /*
 	>>>>>>>>> Config function
 */
-func (storage *MemoryCache) TTLClean(t time.Duration) {
-	storage.RLock()
-	defer storage.RUnlock()
+func (mCache *MemoryCache) TTLClean(t time.Duration) {
+	mCache.RLock()
+	defer mCache.RUnlock()
 
-	storage.ttlClean = t
+	mCache.ttlClean = t
 
-	for _, one := range storage.Shards {
+	for _, one := range mCache.Shards {
 		mes := NewRequest(TypeSetTTL, NewKey(""))
 		mes.TTL = t
 		one.Act(mes)
@@ -54,44 +54,45 @@ func (storage *MemoryCache) TTLClean(t time.Duration) {
 	Config function <<<<<<<<<
 */
 
-func (storage *MemoryCache) Close() {
-	storage.Lock()
-	defer storage.Unlock()
+func (mCache *MemoryCache) Close() {
+	mCache.Lock()
+	defer mCache.Unlock()
 
-	for _, one := range storage.Shards {
+	for _, one := range mCache.Shards {
 		one.Stop()
 	}
 }
 
 // Get returns data by key
-func (storage *MemoryCache) _sendToShard(mes *Request) {
+func (mCache *MemoryCache) _sendToShard(mes *Request) {
 
-	keyShard := mes.Key.ShardID(storage.maxShards)
+	keyShard := mes.Key.ShardID(mCache.maxShards)
 
-	storage.RLock()
-	storage.Shards[keyShard].Act(mes)
-	storage.RUnlock()
+	mCache.RLock()
+	mCache.Shards[keyShard].Act(mes)
+	mCache.RUnlock()
 
 }
 
 // Get returns data by key
-func (storage *MemoryCache) Get(k string) (interface{}, bool) {
+func (mCache *MemoryCache) Get(k string) (interface{}, bool) {
 
 	mes := NewRequest(TypeGet, NewKey(k))
 
-	storage._sendToShard(mes)
+	mCache._sendToShard(mes)
 
 	out, ok := <-mes.ResultChan
 
-	if ok && out.Entry.Valid() {
-		return out.Entry.Data, true
+	if ok {
+		//return out.Entry.Data, true
+		return out.Data, true
 	}
 
 	return nil, false
 }
 
 // // Get returns data by key
-// func (storage *MemoryCache) GetTags(tags ...string) ([]interface{}, bool) {
+// func (mCache *MemoryCache) GetTags(tags ...string) ([]interface{}, bool) {
 
 // 	if len(tags) == 0 {
 // 		return nil, false
@@ -99,7 +100,7 @@ func (storage *MemoryCache) Get(k string) (interface{}, bool) {
 
 // 	mes := NewRequest(TypeGetTag, NewKey(""))
 
-// 	storage._sendToShard(mes)
+// 	mCache._sendToShard(mes)
 
 // 	out, ok := <-mes.ResultChan
 // 	if !ok {
@@ -114,45 +115,45 @@ func (storage *MemoryCache) Get(k string) (interface{}, bool) {
 // 	return data, true
 // }
 
-// Put puts new data in storage _WITHOUT_ TTL
-func (storage *MemoryCache) Put(data interface{}, k string, tags ...string) {
-	storage.PutTTL(data, k, time.Duration(0), tags...)
+// Put puts new data in mCache _WITHOUT_ TTL
+func (mCache *MemoryCache) Put(data interface{}, k string, tags ...string) {
+	mCache.PutTTL(data, k, time.Duration(0), tags...)
 }
 
-// Put puts new data in storage
-func (storage *MemoryCache) PutTTL(data interface{}, k string, TTL time.Duration, tags ...string) {
+// Put puts new data in mCache
+func (mCache *MemoryCache) PutTTL(data interface{}, k string, TTL time.Duration, tags ...string) {
 
 	mes := NewRequest(TypePut, NewKey(k))
 	mes.Data = data
 	mes.Tags = tags
 	mes.TTL = TTL
 
-	storage._sendToShard(mes)
+	mCache._sendToShard(mes)
 }
 
 // Remove remove data in cache by key
-func (storage *MemoryCache) Remove(k string) {
+func (mCache *MemoryCache) Remove(k string) {
 	mes := NewRequest(TypeRemove, NewKey(k))
-	storage._sendToShard(mes)
+	mCache._sendToShard(mes)
 }
 
-func (storage *MemoryCache) RemoveTag(tag string) {
-	storage.RLock()
-	defer storage.RUnlock()
+func (mCache *MemoryCache) RemoveTag(tag string) {
+	mCache.RLock()
+	defer mCache.RUnlock()
 
-	for _, one := range storage.Shards {
+	for _, one := range mCache.Shards {
 		mes := NewRequest(TypeRemTag, NewKey(""))
 		one.Act(mes)
 	}
 }
 
 // Flush removes all entries from cache and returns number of flushed entries
-func (storage *MemoryCache) Flush() {
+func (mCache *MemoryCache) Flush() {
 
-	storage.RLock()
-	defer storage.RUnlock()
+	mCache.RLock()
+	defer mCache.RUnlock()
 
-	for _, one := range storage.Shards {
+	for _, one := range mCache.Shards {
 		mes := NewRequest(TypeFlush, NewKey(""))
 		one.Act(mes)
 	}
