@@ -1,12 +1,15 @@
 package memorycache
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
 
 const (
-	TTLCleanDefault = 1 * time.Minute
+	// 7.333 min
+	TTLCleanDefault   = 60 * 7333 * time.Millisecond
+	PercentBadDefault = 30
 )
 
 // MemoryCache mCache memory
@@ -17,16 +20,24 @@ type Shard struct {
 	entries map[string]*Entry
 	inChan  chan *Request
 
+	// Counter of not-valid records
+	countBad   int
+	percentBad int
+
 	oldest []string
 	ticker *time.Ticker
+	ttl    time.Duration
 }
 
 func NewShard(l int) *Shard {
+
 	s := &Shard{
-		Len:     l,
-		entries: map[string]*Entry{},
-		inChan:  make(chan *Request, 100),
-		ticker:  time.NewTicker(TTLCleanDefault),
+		Len:        l,
+		entries:    map[string]*Entry{},
+		inChan:     make(chan *Request, 100),
+		ticker:     time.NewTicker(TTLCleanDefault),
+		percentBad: PercentBadDefault,
+		ttl:        TTLCleanDefault,
 	}
 
 	go s._work()
@@ -72,12 +83,24 @@ func (s *Shard) _make(mes *Request) {
 		s.flush()
 	case TypeSetTTL:
 		s.setTTL(mes)
+	case TypeSetPercentBad:
+		s.setPercentBad(mes)
+	case TypeGetTag:
+		s.getTag(mes)
 	}
 }
 
 func (s *Shard) setTTL(mes *Request) {
+	s.ttl = mes.TTL
 	s.ticker.Stop()
 	s.ticker = time.NewTicker(mes.TTL)
+}
+
+func (s *Shard) setPercentBad(mes *Request) {
+	i, ok := mes.Data.(int)
+	if ok && i > -1 {
+		s.percentBad = i
+	}
 }
 
 func (s *Shard) get(mes *Request) {
@@ -89,10 +112,41 @@ func (s *Shard) get(mes *Request) {
 	if ok && entry.Valid() {
 		out.Data = entry.Data
 		out.Ok = true
+	} else {
+		s.countBad++
 	}
 
-	//mes.ResultChan <- out
 	mes.ResultChan <- out
+	s.checkCounterTrim()
+}
+
+func (s *Shard) getTag(mes *Request) {
+
+	t := mes.Tags[0]
+
+	s.RLock()
+	list := []interface{}{}
+	for _, entry := range s.entries {
+		if !entry.Tags[t] {
+			continue
+		}
+
+		if entry.Valid() {
+			list = append(list, entry.Data)
+		} else {
+			s.countBad++
+		}
+	}
+	s.RUnlock()
+
+	out := NewRes()
+	out.Data = list
+	if len(list) > 0 {
+		out.Ok = true
+	}
+
+	mes.ResultChan <- out
+	s.checkCounterTrim()
 }
 
 // func (s *Shard) shardCount(shardID int, stChan chan []int) (mes Request) {
@@ -166,22 +220,54 @@ func (s *Shard) flush() {
 	s.entries = map[string]*Entry{}
 }
 
+func (s *Shard) checkCounterTrim() {
+
+	if (100*s.countBad)/s.Len < s.percentBad {
+		return
+	}
+
+	s.ticker.Stop()
+	s.trim()
+	s.ticker = time.NewTicker(s.ttl)
+}
+
 func (s *Shard) trim() {
 
-	forDelete := len(s.entries) - s.Len
-	if forDelete < 0 {
+	if (100*len(s.entries))/s.Len < s.percentBad {
 		return
 	}
 
 	s.Lock()
 	defer s.Unlock()
 
-	s.oldest = s.oldest[forDelete:]
+	good := 0
+	news := []string{}
 	list := map[string]*Entry{}
-	for _, key := range s.oldest {
-		if entry, ok := s.entries[key]; ok && entry.Valid() {
-			list[key] = entry
+	for i := len(s.oldest) - 1; i >= 0; i-- {
+		key := s.oldest[i]
+
+		entry, ok := s.entries[key]
+		if !ok || !entry.Valid() {
+			continue
+		}
+
+		_, ok = list[key]
+		if ok {
+			continue
+		}
+
+		list[key] = entry
+		news = append(news, key)
+		good++
+
+		if good >= s.Len {
+			break
 		}
 	}
+
+	sort.Reverse(sort.StringSlice(news))
+
 	s.entries = list
+	s.oldest = news
+	s.countBad = 0
 }

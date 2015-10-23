@@ -14,6 +14,8 @@ const (
 	TypeFlush  Act = iota
 	TypeCount  Act = iota
 	TypeSetTTL Act = iota
+
+	TypeSetPercentBad Act = iota
 )
 
 type Res struct {

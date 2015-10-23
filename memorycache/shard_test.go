@@ -58,3 +58,16 @@ func (s *CreateShardTestsSuite) Test_setTTL(c *C) {
 
 	c.Check(len(sh.entries), Equals, 10)
 }
+
+func (s *CreateShardTestsSuite) Test_trim(c *C) {
+	//c.Skip("Not now")
+	sh := NewShard(10)
+	c.Assert(sh, NotNil)
+
+	for i := 0; i < 10; i++ {
+		mes := NewRequest(TypePut, NewKey(fmt.Sprintf("key:%d", i)))
+		sh.put(mes)
+	}
+
+	c.Check(len(sh.entries), Equals, 10)
+}

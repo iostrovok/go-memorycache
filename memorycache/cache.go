@@ -13,8 +13,9 @@ type MemoryCache struct {
 	maxEntries         int
 	maxEntriesPerShard int
 
-	ttlClean time.Duration
-	Shards   []*Shard
+	percentBad int
+	ttlClean   time.Duration
+	Shards     []*Shard
 }
 
 // NewMemoryCache returns new initializated instance of MemoryCache
@@ -46,6 +47,19 @@ func (mCache *MemoryCache) TTLClean(t time.Duration) {
 	for _, one := range mCache.Shards {
 		mes := NewRequest(TypeSetTTL, NewKey(""))
 		mes.TTL = t
+		one.Act(mes)
+	}
+}
+
+func (mCache *MemoryCache) PercentBad(i int) {
+	mCache.RLock()
+	defer mCache.RUnlock()
+
+	mCache.percentBad = i
+
+	for _, one := range mCache.Shards {
+		mes := NewRequest(TypeSetPercentBad, NewKey(""))
+		mes.Data = i
 		one.Act(mes)
 	}
 }
@@ -91,29 +105,47 @@ func (mCache *MemoryCache) Get(k string) (interface{}, bool) {
 	return nil, false
 }
 
-// // Get returns data by key
-// func (mCache *MemoryCache) GetTags(tags ...string) ([]interface{}, bool) {
+// GetTag returns data by tag
+func (mCache *MemoryCache) GetTag(tag string) ([]interface{}, bool) {
 
-// 	if len(tags) == 0 {
-// 		return nil, false
-// 	}
+	out := []interface{}{}
 
-// 	mes := NewRequest(TypeGetTag, NewKey(""))
+	if tag == "" {
+		return out, false
+	}
 
-// 	mCache._sendToShard(mes)
+	chRes := make(chan *Res, 1)
 
-// 	out, ok := <-mes.ResultChan
-// 	if !ok {
-// 		return nil, false
-// 	}
+	count := 0
+	mCache.RLock()
+	for _, one := range mCache.Shards {
+		count++
+		mes := NewRequest(TypeGetTag, NewKey(""))
+		mes.Tags = []string{tag}
+		mes.ResultChan = chRes
+		one.Act(mes)
+	}
+	mCache.RUnlock()
 
-// 	data, ok := out.Entry.Data.([]interface{})
-// 	if !ok {
-// 		return nil, false
-// 	}
+	for count > 0 {
+		count--
 
-// 	return data, true
-// }
+		res, ok := <-chRes
+		if !ok {
+			continue
+		}
+
+		d, ok := res.Data.([]interface{})
+		if ok {
+			out = append(out, d)
+		}
+	}
+
+	if len(out) > 0 {
+		return out, true
+	}
+	return out, false
+}
 
 // Put puts new data in mCache _WITHOUT_ TTL
 func (mCache *MemoryCache) Put(data interface{}, k string, tags ...string) {

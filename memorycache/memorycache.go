@@ -15,6 +15,10 @@ func TTLClean(t time.Duration) {
 	Singleton.TTLClean(t)
 }
 
+func PercentBad(i int) {
+	Singleton.PercentBad(i)
+}
+
 // Close mCache memory channels
 func Close() {
 	Singleton.Close()
@@ -24,6 +28,11 @@ func Close() {
 // Get returns data by key
 func Get(k string) (data interface{}, ok bool) {
 	return Singleton.Get(k)
+}
+
+// GetTag returns data by tag
+func GetTag(tag string) ([]interface{}, bool) {
+	return Singleton.GetTag(tag)
 }
 
 // Put puts new data in mCache _WITHOUT_ TTL
