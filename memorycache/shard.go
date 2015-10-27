@@ -184,6 +184,8 @@ func (s *Shard) removeTag(mes *Request) {
 	s.Lock()
 	defer s.Unlock()
 
+	noMustClean := true
+
 	list := map[string]*Entry{}
 	for key, entry := range s.entries {
 		if !entry.Valid() {
@@ -194,6 +196,7 @@ func (s *Shard) removeTag(mes *Request) {
 		for _, tag := range mes.Tags {
 			if entry.Tags[tag] {
 				valid = false
+				noMustClean = false
 				break
 			}
 		}
@@ -202,8 +205,13 @@ func (s *Shard) removeTag(mes *Request) {
 			list[key] = entry
 		}
 	}
-	s.entries = list
 
+	// Nothing was removed
+	if noMustClean {
+		return
+	}
+
+	s.entries = list
 	// Update oldest
 	oldest := []string{}
 	for _, key := range s.oldest {
