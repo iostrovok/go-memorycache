@@ -36,8 +36,10 @@ func New(shards int, totalLimit int) *MemoryCache {
 }
 
 /*
-	>>>>>>>>> Config function
+	>>>>>>>>> Config functions START
 */
+
+// PercentBad sets the TTL for each shards.
 func (mCache *MemoryCache) TTLClean(t time.Duration) {
 	mCache.RLock()
 	defer mCache.RUnlock()
@@ -51,6 +53,7 @@ func (mCache *MemoryCache) TTLClean(t time.Duration) {
 	}
 }
 
+// PercentBad sets the percentage of overload for each shards.
 func (mCache *MemoryCache) PercentBad(i int) {
 	mCache.RLock()
 	defer mCache.RUnlock()
@@ -65,7 +68,7 @@ func (mCache *MemoryCache) PercentBad(i int) {
 }
 
 /*
-	Config function <<<<<<<<<
+	Config functions FINISH <<<<<<<<<
 */
 
 func (mCache *MemoryCache) Close() {
@@ -77,7 +80,7 @@ func (mCache *MemoryCache) Close() {
 	}
 }
 
-// Get returns data by key
+// _sendToShard send one message to the shard
 func (mCache *MemoryCache) _sendToShard(mes *Request) {
 
 	keyShard := mes.Key.ShardID(mCache.maxShards)
