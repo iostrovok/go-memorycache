@@ -49,7 +49,14 @@ func _press(data interface{}, PF map[string]Press, tag string) (interface{}, boo
 }
 
 // CreateEntry returns new instance of Entry
-func CreateEntry(k Key, data interface{}, comp Compress, tags []string, TTL time.Duration, PF map[string]Press) *Entry {
+func CreateEntry(mes *Request, PF map[string]Press) *Entry {
+
+	k := mes.Key
+	data := mes.Data
+	comp := mes.Compress
+	tags := mes.Tags
+	TTL := mes.TTL
+
 	out := &Entry{
 		Key:         k,
 		CreateDate:  time.Now(),

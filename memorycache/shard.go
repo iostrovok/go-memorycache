@@ -159,7 +159,7 @@ func (s *Shard) getTag(mes *Request) {
 
 func (s *Shard) put(mes *Request) {
 
-	e := CreateEntry(mes.Key, mes.Data, mes.Compress, mes.Tags, mes.TTL, s.pressFuncs)
+	e := CreateEntry(mes, s.pressFuncs)
 
 	if !e.Valid() {
 		return
